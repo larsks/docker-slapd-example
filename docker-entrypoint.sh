@@ -1,4 +1,4 @@
-#!/bin/sh -x
+#!/bin/sh
 
 : ${LDAP_LIMIT_FILES:=4096}
 
