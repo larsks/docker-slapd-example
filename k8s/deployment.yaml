@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slapd
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: slapd
+          image: ghcr.io/larsks/docker-slapd-example:main
+          env:
+            - name: LDAP_DEBUG_LEVEL
+              value: "1"
+          volumeMounts:
+            - name: slapd-config
+              mountPath: /docker-entrypoint.d
+      volumes:
+        - name: slapd-config
+          configMap:
+            name: slapd-config
