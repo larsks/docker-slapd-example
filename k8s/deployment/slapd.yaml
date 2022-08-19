@@ -9,6 +9,11 @@ spec:
       containers:
         - name: slapd
           image: ghcr.io/larsks/docker-slapd-example:main
+          ports:
+            - name: ldap
+              containerPort: 389
+            - name: ldaps
+              containerPort: 636
           env:
             - name: LDAP_DEBUG_LEVEL
               value: "1"

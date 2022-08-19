@@ -5,7 +5,9 @@ commonLabels:
   app: slapd
 
 resources:
-  - deployment.yaml
+  - deployment/slapd.yaml
+  - deployment/client.yaml
+  - service.yaml
 
 configMapGenerator:
   - name: slapd-config
