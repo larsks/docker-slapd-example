@@ -12,3 +12,4 @@ olcSuffix: dc=example,dc=com
 olcRootDN: cn=manager,dc=example,dc=com
 olcRootPW:: c2VjcmV0
 olcDbDirectory: /var/lib/openldap/example.com
+olcAccess: to * by dn.base="gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth" manage

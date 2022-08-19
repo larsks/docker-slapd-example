@@ -5,7 +5,6 @@ o: example.com
 dc: example
 
 dn: cn=manager,dc=example,dc=com
-objectClass: simpleSecurityObject
 objectClass: organizationalRole
 cn: manager
 description: LDAP administrator
