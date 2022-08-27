@@ -44,6 +44,10 @@ if ! [ -d /etc/openldap/slapd.d ]; then
 				rc=$?
 				;;
 
+			*.ldifm) ldapmodify -Y EXTERNAL -H ldapi:// -f "$initfile"
+				rc=$?
+				;;
+
 			*.schema)
 				schemaname="$(cat initfile)"
 				ldapadd -Y EXTERNAL -H ldapi:// -f "/etc/openldap/schema/$schemaname.ldif"
