@@ -4,8 +4,9 @@
 
 ulimit -n "${LDAP_LIMIT_FILES}"
 
+# This is a dumb path but it's the compiled-in default
+# (used by slapd for the ldapi socket).
 install -d -m 700 -o ldap -g ldap /var/lib/openldap/run
-chown -R ldap:ldap /var/lib/openldap
 
 if ! [ -d /etc/openldap/slapd.d ]; then
 	mkdir /etc/openldap/slapd.d
@@ -15,8 +16,6 @@ if ! [ -d /etc/openldap/slapd.d ]; then
 	# an ldapi:// connection. This will permit us to start up a temporary
 	# slapd instance in order to submit initialization files.
 	cat <<-EOF > /etc/openldap/slapd.conf.init
-	pidfile /var/lib/openldap/run/slapd.pid
-
 	database config
 	access to * by dn.base="gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth" manage
 	EOF
@@ -25,7 +24,8 @@ if ! [ -d /etc/openldap/slapd.d ]; then
 	slaptest -f /etc/openldap/slapd.conf.init -F /etc/openldap/slapd.d
 
 	# Start a temporary slapd instance in the background.
-	slapd -h ldapi:///
+	slapd -d1 -h ldapi:/// &
+	slapd_pid=$!
 
 	# Import the core schema
 	ldapadd -Y EXTERNAL -H ldapi:// -f /etc/openldap/schema/core.ldif
@@ -67,7 +67,7 @@ if ! [ -d /etc/openldap/slapd.d ]; then
 		fi
 	done
 
-	kill $(cat /var/lib/openldap/run/slapd.pid)
+	kill "$slapd_pid"
 	chown -R ldap:ldap /etc/openldap/slapd.d /var/lib/openldap
 
 fi
