@@ -1,6 +1,17 @@
 #!/bin/sh
 
-: ${LDAP_LIMIT_FILES:=4096}
+: "${LDAP_LIMIT_FILES:=4096}"
+: "${LDAP_INIT_DEBUG_LEVEL:=0}"
+
+DIE() {
+	echo "FAILED: $*" >&2
+	exit 1
+}
+
+slapd_is_up() {
+	ldapsearch -Y EXTERNAL -H ldapi:// -b "" \
+		-s base objectclass=\* namingcontexts > /dev/null 2>&1
+}
 
 ulimit -n "${LDAP_LIMIT_FILES}"
 
@@ -21,17 +32,26 @@ if ! [ -d /etc/openldap/slapd.d ]; then
 	EOF
 
 	# Convert the stub slapd.conf into a cn=config directory configuration.
-	slaptest -f /etc/openldap/slapd.conf.init -F /etc/openldap/slapd.d
+	slaptest -f /etc/openldap/slapd.conf.init -F /etc/openldap/slapd.d ||
+		DIE "failed to initialize slapd configuration"
 
 	# Start a temporary slapd instance in the background.
-	slapd -d1 -h ldapi:/// &
+	slapd -d${LDAP_INIT_DEBUG_LEVEL} -h ldapi:/// &
 	slapd_pid=$!
 
+	until slapd_is_up; do
+		echo "waiting for slapd..."
+		sleep 1
+	done
+
 	# Import the core schema
-	ldapadd -Y EXTERNAL -H ldapi:// -f /etc/openldap/schema/core.ldif
+	ldapadd -Y EXTERNAL -H ldapi:// -f /etc/openldap/schema/core.ldif ||
+		DIE "failed to load core schema"
 
 	for initfile in /docker-entrypoint.d/*; do
 		[ -f "$initfile" ] || continue
+
+		echo "Processing: $initfile"
 
 		rc=0
 
@@ -60,11 +80,10 @@ if ! [ -d /etc/openldap/slapd.d ]; then
 		esac
 		
 		if [ "$rc" -ne 0 ]; then
-			echo "FAILED: $initfile" >&2
-			exit 1
-		else
-			echo "SUCCESS: $initfile"
+			DIE "error processing $initfile"
 		fi
+
+		echo "SUCCESS: $initfile"
 	done
 
 	kill "$slapd_pid"
