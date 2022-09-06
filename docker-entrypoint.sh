@@ -60,9 +60,9 @@ if ! [ -d "${LDAP_SYSCONFDIR}/slapd.d" ]; then
 		sleep 1
 	done
 
-	for initfile in /docker-entrypoint.d/*; do
+	find /docker-entrypoint.d -name slapd.dump -prune -o -type f -print |
+	while read -r initfile; do
 		[ -f "$initfile" ] || continue
-		[ "$initfile" = "slapd.udmp" ] && continue
 
 		echo "Processing: $initfile"
 
@@ -83,7 +83,7 @@ if ! [ -d "${LDAP_SYSCONFDIR}/slapd.d" ]; then
 				;;
 
 			*.schema)
-				schemaname="$(cat $initfile)"
+				schemaname="$(cat "$initfile")"
 				ldapadd -Y EXTERNAL -H ldapi:// \
 					-f "${LDAP_SYSCONFDIR}/schema/$schemaname.ldif"
 				rc=$?
@@ -99,7 +99,7 @@ if ! [ -d "${LDAP_SYSCONFDIR}/slapd.d" ]; then
 		fi
 
 		echo "SUCCESS: $initfile"
-	done
+	done || exit
 
 	kill "$slapd_pid"
 	chown -R ldap:ldap "${LDAP_SYSCONFDIR}/slapd.d" "${LDAP_DATADIR}"
