@@ -22,6 +22,8 @@ if [ -n "$LDAP_LIMIT_FILES" ]; then
 	ulimit -n "${LDAP_LIMIT_FILES}"
 fi
 
+install -d -m 700 -o ldap -g ldap "${LDAP_DATADIR}/run"
+
 if ! [ -d "${LDAP_SYSCONFDIR}/slapd.d" ]; then
 	mkdir "${LDAP_SYSCONFDIR}/slapd.d"
 
