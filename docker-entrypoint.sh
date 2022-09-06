@@ -1,16 +1,12 @@
 #!/bin/sh
 
-: "${LDAP_DATADIR:=/usr/local/openldap/var}"
 : "${LDAP_INIT_DEBUG_LEVEL:=0}"
-: "${LDAP_LIBEXECDIR:=/usr/local/openldap/libexec}"
 : "${LDAP_LIMIT_FILES:=4096}"
-: "${LDAP_SBINDIR:=/usr/local/openldap/sbin}"
-: "${LDAP_BINDIR:=/usr/local/openldap/bin}"
-: "${LDAP_SYSCONFDIR:=/usr/local/openldap/etc}"
+
+. /etc/docker/distro.conf
 
 PATH="${LDAP_SBINDIR}:${LDAP_BINDIR}:${PATH}"
-
-export PATH LDAP_SYSCONFDIR LDAP_DATADIR LDAP_SBINDIR LDAP_LIBEXECDIR
+export PATH
 
 DIE() {
 	echo "FAILED: $*" >&2
@@ -22,14 +18,16 @@ slapd_is_up() {
 		-s base objectclass=\* namingcontexts > /dev/null 2>&1
 }
 
-ulimit -n "${LDAP_LIMIT_FILES}"
+if [ -n "$LDAP_LIMIT_FILES" ]; then
+	ulimit -n "${LDAP_LIMIT_FILES}"
+fi
 
-if ! [ -d ${LDAP_SYSCONFDIR}/openldap/slapd.d ]; then
-	mkdir ${LDAP_SYSCONFDIR}/openldap/slapd.d
+if ! [ -d "${LDAP_SYSCONFDIR}/slapd.d" ]; then
+	mkdir "${LDAP_SYSCONFDIR}/slapd.d"
 
 	if [ -f /docker-entrypoint.d/slapd.dump ]; then
 		# Restore from a slapd dump produced with slapcat
-		slapadd	-n 0 -F ${LDAP_SYSCONFDIR}/openldap/slapd.d \
+		slapadd	-n 0 -F "${LDAP_SYSCONFDIR}/slapd.d" \
 			-l /docker-entrypoint.d/slapd.dump -d1 ||
 			DIE "failed to restore from slapd.dump"
 	else
@@ -37,24 +35,24 @@ if ! [ -d ${LDAP_SYSCONFDIR}/openldap/slapd.d ]; then
 		# to a known location, and permit root access to cn=config over
 		# an ldapi:// connection. This will permit us to start up a temporary
 		# slapd instance in order to submit initialization files.
-		cat <<-EOF > ${LDAP_SYSCONFDIR}/openldap/slapd.conf.init
+		cat <<-EOF > "${LDAP_SYSCONFDIR}/slapd.conf.init"
 		database config
 		access to * by dn.base="gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth" manage
 		EOF
 
 		# Convert the stub slapd.conf into a cn=config directory configuration.
-		slaptest -f ${LDAP_SYSCONFDIR}/openldap/slapd.conf.init \
-			-F ${LDAP_SYSCONFDIR}/openldap/slapd.d ||
+		slaptest -f "${LDAP_SYSCONFDIR}/slapd.conf.init" \
+			-F "${LDAP_SYSCONFDIR}/slapd.d" ||
 			DIE "failed to initialize slapd configuration"
 
 		# Add core schema
-		slapadd -n 0 -l ${LDAP_SYSCONFDIR}/openldap/schema/core.ldif \
-			-F ${LDAP_SYSCONFDIR}/openldap/slapd.d ||
+		slapadd -n 0 -l "${LDAP_SYSCONFDIR}/schema/core.ldif" \
+			-F "${LDAP_SYSCONFDIR}/slapd.d" ||
 			DIE "failed to load core schema"
 	fi
 
 	# Start a temporary slapd instance in the background.
-	${LDAP_LIBEXECDIR}/slapd -d${LDAP_INIT_DEBUG_LEVEL} -h ldapi:/// &
+	${LDAP_SLAPD_PATH} -d${LDAP_INIT_DEBUG_LEVEL} -h ldapi:/// &
 	slapd_pid=$!
 
 	until slapd_is_up; do
@@ -64,6 +62,7 @@ if ! [ -d ${LDAP_SYSCONFDIR}/openldap/slapd.d ]; then
 
 	for initfile in /docker-entrypoint.d/*; do
 		[ -f "$initfile" ] || continue
+		[ "$initfile" = "slapd.udmp" ] && continue
 
 		echo "Processing: $initfile"
 
@@ -78,20 +77,19 @@ if ! [ -d ${LDAP_SYSCONFDIR}/openldap/slapd.d ]; then
 				rc=$?
 				;;
 
-			*.ldifm) ldapmodify -Y EXTERNAL -H ldapi:// -f "$initfile"
+			*.ldifm)
+				ldapmodify -Y EXTERNAL -H ldapi:// -f "$initfile"
 				rc=$?
 				;;
 
 			*.schema)
 				schemaname="$(cat $initfile)"
-				ldapadd -Y EXTERNAL -H ldapi:// -f "${LDAP_SYSCONFDIR}/openldap/schema/$schemaname.ldif"
+				ldapadd -Y EXTERNAL -H ldapi:// \
+					-f "${LDAP_SYSCONFDIR}/schema/$schemaname.ldif"
 				rc=$?
 				;;
 
-			*.dump)	:
-				;;
-
-			*)	echo "Unsupported extension: $initfile"
+			*)	echo "Unknown filetype: $initfile"
 				rc=1
 				;;
 		esac
@@ -104,7 +102,7 @@ if ! [ -d ${LDAP_SYSCONFDIR}/openldap/slapd.d ]; then
 	done
 
 	kill "$slapd_pid"
-	chown -R ldap:ldap ${LDAP_SYSCONFDIR}/openldap/slapd.d ${LDAP_DATADIR}
+	chown -R ldap:ldap "${LDAP_SYSCONFDIR}/slapd.d" "${LDAP_DATADIR}"
 
 fi
 
