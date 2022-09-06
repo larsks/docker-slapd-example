@@ -1,7 +1,16 @@
 #!/bin/sh
 
-: "${LDAP_LIMIT_FILES:=4096}"
+: "${LDAP_DATADIR:=/usr/local/openldap/var}"
 : "${LDAP_INIT_DEBUG_LEVEL:=0}"
+: "${LDAP_LIBEXECDIR:=/usr/local/openldap/libexec}"
+: "${LDAP_LIMIT_FILES:=4096}"
+: "${LDAP_SBINDIR:=/usr/local/openldap/sbin}"
+: "${LDAP_BINDIR:=/usr/local/openldap/bin}"
+: "${LDAP_SYSCONFDIR:=/usr/local/openldap/etc}"
+
+PATH="${LDAP_SBINDIR}:${LDAP_BINDIR}:${PATH}"
+
+export PATH LDAP_SYSCONFDIR LDAP_DATADIR LDAP_SBINDIR LDAP_LIBEXECDIR
 
 DIE() {
 	echo "FAILED: $*" >&2
@@ -15,28 +24,24 @@ slapd_is_up() {
 
 ulimit -n "${LDAP_LIMIT_FILES}"
 
-# This is a dumb path but it's the compiled-in default
-# (used by slapd for the ldapi socket).
-install -d -m 700 -o ldap -g ldap /var/lib/openldap/run
-
-if ! [ -d /etc/openldap/slapd.d ]; then
-	mkdir /etc/openldap/slapd.d
+if ! [ -d ${LDAP_SYSCONFDIR}/openldap/slapd.d ]; then
+	mkdir ${LDAP_SYSCONFDIR}/openldap/slapd.d
 
 	# Initial slapd with a configuration that will write a PID file
 	# to a known location, and permit root access to cn=config over
 	# an ldapi:// connection. This will permit us to start up a temporary
 	# slapd instance in order to submit initialization files.
-	cat <<-EOF > /etc/openldap/slapd.conf.init
+	cat <<-EOF > ${LDAP_SYSCONFDIR}/openldap/slapd.conf.init
 	database config
 	access to * by dn.base="gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth" manage
 	EOF
 
 	# Convert the stub slapd.conf into a cn=config directory configuration.
-	slaptest -f /etc/openldap/slapd.conf.init -F /etc/openldap/slapd.d ||
+	slaptest -f ${LDAP_SYSCONFDIR}/openldap/slapd.conf.init -F ${LDAP_SYSCONFDIR}/openldap/slapd.d ||
 		DIE "failed to initialize slapd configuration"
 
 	# Start a temporary slapd instance in the background.
-	slapd -d${LDAP_INIT_DEBUG_LEVEL} -h ldapi:/// &
+	${LDAP_LIBEXECDIR}/slapd -d${LDAP_INIT_DEBUG_LEVEL} -h ldapi:/// &
 	slapd_pid=$!
 
 	until slapd_is_up; do
@@ -45,7 +50,7 @@ if ! [ -d /etc/openldap/slapd.d ]; then
 	done
 
 	# Import the core schema
-	ldapadd -Y EXTERNAL -H ldapi:// -f /etc/openldap/schema/core.ldif ||
+	ldapadd -Y EXTERNAL -H ldapi:// -f ${LDAP_SYSCONFDIR}/openldap/schema/core.ldif ||
 		DIE "failed to load core schema"
 
 	for initfile in /docker-entrypoint.d/*; do
@@ -69,8 +74,8 @@ if ! [ -d /etc/openldap/slapd.d ]; then
 				;;
 
 			*.schema)
-				schemaname="$(cat initfile)"
-				ldapadd -Y EXTERNAL -H ldapi:// -f "/etc/openldap/schema/$schemaname.ldif"
+				schemaname="$(cat $initfile)"
+				ldapadd -Y EXTERNAL -H ldapi:// -f "${LDAP_SYSCONFDIR}/openldap/schema/$schemaname.ldif"
 				rc=$?
 				;;
 
@@ -87,7 +92,7 @@ if ! [ -d /etc/openldap/slapd.d ]; then
 	done
 
 	kill "$slapd_pid"
-	chown -R ldap:ldap /etc/openldap/slapd.d /var/lib/openldap
+	chown -R ldap:ldap ${LDAP_SYSCONFDIR}/openldap/slapd.d ${LDAP_DATADIR}
 
 fi
 
