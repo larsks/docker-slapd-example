@@ -29,11 +29,12 @@ if ! [ -d "${LDAP_SYSCONFDIR}/slapd.d" ]; then
 
 	if [ -f /docker-entrypoint.d/slapd.dump ]; then
 		# Restore from a slapd dump produced with slapcat
+		echo "Restoring database from slapd.dump..."
 		slapadd	-n 0 -F "${LDAP_SYSCONFDIR}/slapd.d" \
 			-l /docker-entrypoint.d/slapd.dump -d1 ||
 			DIE "failed to restore from slapd.dump"
 	else
-		# Initial slapd with a configuration that will write a PID file
+		# Initialize slapd with a configuration that will write a PID file
 		# to a known location, and permit root access to cn=config over
 		# an ldapi:// connection. This will permit us to start up a temporary
 		# slapd instance in order to submit initialization files.
