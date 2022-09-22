@@ -64,6 +64,7 @@ if ! [ -d "${LDAP_SYSCONFDIR}/slapd.d" ]; then
 	done
 
 	find /docker-entrypoint.d -name slapd.dump -prune -o -type f -print |
+        sort |
 	while read -r initfile; do
 		[ -f "$initfile" ] || continue
 
