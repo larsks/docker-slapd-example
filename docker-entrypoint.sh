@@ -62,7 +62,7 @@ if ! [ -d "${LDAP_SYSCONFDIR}/slapd.d" ]; then
 		sleep 1
 	done
 
-	find /docker-entrypoint.d -name slapd.dump -prune -o -type f -print |
+	find /docker-entrypoint.d -maxdepth 1 -name slapd.dump -prune -o -type f -print |
 	while read -r initfile; do
 		[ -f "$initfile" ] || continue
 
